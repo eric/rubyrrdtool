@@ -1,0 +1,33 @@
+ --> rrdname=[randome.rrd]
+Checking RRD database -> randome.rrd
+info() returned 29 items
+ ds[a].last_ds --> UNKN
+ last_update --> -1024815209
+ rra[0].cdp_prep[0].unknown_datapoints --> 0
+ ds[a].min --> Nil
+ step --> 300
+ rra[1].cdp_prep[0].unknown_datapoints --> 4
+ rra[1].pdp_per_row --> 12
+ rra[2].xff --> 0.5
+ rra[1].cf --> MIN
+ rra[0].rows --> 300
+ ds[a].unknown_sec --> 39
+ ds[a].value --> 0.0
+ ds[a].type --> GAUGE
+ rra[2].pdp_per_row --> 12
+ rra[2].cf --> MAX
+ rra[1].xff --> 0.5
+ rra[1].rows --> 300
+ rra[2].rows --> 300
+ rra[1].cdp_prep[0].value --> Nil
+ rra[0].xff --> 0.5
+ ds[a].minimal_heartbeat --> 600
+ rra[2].cdp_prep[0].unknown_datapoints --> 4
+ rra[0].cdp_prep[0].value --> Nil
+ rra[0].pdp_per_row --> 1
+ rrd_version --> 0003
+ filename --> randome.rrd
+ ds[a].max --> Nil
+ rra[2].cdp_prep[0].value --> Nil
+ rra[0].cf --> AVERAGE
+
