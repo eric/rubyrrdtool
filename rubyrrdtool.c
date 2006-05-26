@@ -1,9 +1,9 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2005/08/04 01:16:08 $
+ * date:   $Date: 2006/05/26 19:37:48 $
  * init:   2005-07-26
  * vers:   $Version$
- * auth:   $Author: probertm $
+ * auth:   $Author: dbach $
  * -----
  * This is a Ruby extension (binding) for RRDTool
  * 
@@ -27,7 +27,7 @@
 #define  R_RRD_DEBUG_OFF 0  /* no debugging   */
 #define  R_RRD_DEBUG_SIM 1  /* basic debug    */
 #define  R_RRD_DEBUG_DET 2  /* more details   */
-#define  R_RRD_DBG       R_RRD_DEBUG_DET
+#define  R_RRD_DBG       R_RRD_DEBUG_OFF
 
 #ifdef R_RRD_DBG
 void _dbug(int level, char *s) {
@@ -43,19 +43,17 @@ VALUE rb_eRRDtoolError;
 extern int optind;
 extern int opterr;
 
+typedef int (*RRDtoolFUNC)(int argc, char ** argv);
 
 /*
- * define a macro for easy error checking
+ * define macros for easy error checking
  */
-typedef int (*RRDtoolFUNC)(int argc, char ** argv);
-#define RRD_CHECK_ERROR  \
-    if (rrd_test_error()) \
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-    rrd_clear_error();
 
+#define RRD_RAISE  rb_raise(rb_eRRDtoolError, rrd_get_error());
 
+#define RRD_CHECK_ERROR  if (rrd_test_error()) RRD_RAISE
 
-#define NUM_BUF_SZ 100
+#define NUM_BUF_SZ 80
 
 /*
  * Define a structure to store counted array of strings
@@ -76,16 +74,19 @@ typedef struct string_array_t {
  * needed for some reason.  
  * 
  */
-static s_arr s_arr_new(VALUE self, bool name_f, 
-                       bool dummy_f, VALUE strs)
+static s_arr s_arr_new(VALUE self, bool name_f, bool dummy_f, VALUE strs)
 {
     s_arr   a;
-    char    buf[NUM_BUF_SZ];
     int     i, j; /* index counters */
     VALUE   rrd;  /* name of the RRD we are dealing with */
+
+#ifdef R_RRD_DBG    
+    char    buf[NUM_BUF_SZ+1];
+#endif
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "s_arr: name_f=[%d] dummy_f=[%d]", name_f, dummy_f);
+    snprintf(buf, NUM_BUF_SZ, "s_arr: name_f=[%d] dummy_f=[%d]", name_f, dummy_f);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_DET, buf);
 #endif
     
@@ -97,20 +98,23 @@ static s_arr s_arr_new(VALUE self, bool name_f,
     if (name_f)  {  a.len++; }
     if (dummy_f) {  a.len++; }
     a.strs = ALLOC_N(char*, a.len);
+    
 #ifdef R_RRD_DBG    
-    sprintf(buf, "s_arr: array length set to %d", a.len);
+    snprintf(buf, NUM_BUF_SZ, "s_arr: array length set to %d", a.len);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_DET, buf);
 #endif
     
     i = 0;
-    /* add a dummy entry if needed */
-    if (name_f) {
+    /* drb: some of the rrd API functions assume the action preceeds the
+     * command arguments */
+    if (dummy_f) {
         a.strs[i] = strdup("dummy");
         i++;
     }
     
     /* add the rrdname if needed */
-    if (dummy_f) {
+    if (name_f) {
         a.strs[i] = strdup(STR2CSTR(rrd));
         i++;
     }
@@ -121,30 +125,22 @@ static s_arr s_arr_new(VALUE self, bool name_f,
         VALUE v = rb_ary_entry(strs, j);
 
         switch (TYPE(v)) {
-        case T_STRING:
-            a.strs[i] = strdup(STR2CSTR(v));
-#ifdef R_RRD_DBG    
-            sprintf(buf, "s_arr: adding: i=%d type=T_STRING val=%s", 
-                    i, a.strs[i]);
-            _dbug(R_RRD_DEBUG_DET, buf);
-#endif
-            break;
-            
         case T_BIGNUM:
         case T_FIXNUM:
-            snprintf(buf, NUM_BUF_SZ-1, "%d", FIX2INT(v));
-            a.strs[i] = strdup(buf);
+        case T_STRING:
+            a.strs[i] = strdup(StringValuePtr(v));
 #ifdef R_RRD_DBG    
-            sprintf(buf, "s_arr: adding: i=%d type=T_FIXNUM val=%s", 
-                    i, a.strs[i]);
+            snprintf(buf, NUM_BUF_SZ, "s_arr: adding: i=%d val=%s", i, a.strs[i]);
+            buf[NUM_BUF_SZ] = 0;
             _dbug(R_RRD_DEBUG_DET, buf);
 #endif
             break;
             
         default:
 #ifdef R_RRD_DBG    
-            sprintf(buf, "s_arr: adding: i=%d type=%d", i, TYPE(v));
-            _dbug(R_RRD_DEBUG_DET, buf);
+           snprintf(buf, NUM_BUF_SZ, "s_arr: adding: i=%d type=%d", i, TYPE(v));
+           buf[NUM_BUF_SZ] = 0;
+           _dbug(R_RRD_DEBUG_DET, buf);
 #endif          
             rb_raise(rb_eTypeError, "invalid argument for string array");
             break;
@@ -153,11 +149,13 @@ static s_arr s_arr_new(VALUE self, bool name_f,
     }
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "s_arr: len -> %d", a.len);
+    snprintf(buf, NUM_BUF_SZ, "s_arr: len -> %d", a.len);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
     for (i = 0; i < a.len; i++) {
-        sprintf(buf, "s_arr[%d] -> %s", i, a.strs[i]);
-        _dbug(R_RRD_DEBUG_SIM, buf);
+       snprintf(buf, NUM_BUF_SZ, "s_arr[%d] -> %s", i, a.strs[i]);
+       buf[NUM_BUF_SZ] = 0;
+       _dbug(R_RRD_DEBUG_SIM, buf);
     }
 #endif          
     return a;
@@ -170,10 +168,10 @@ static s_arr s_arr_new(VALUE self, bool name_f,
 static void s_arr_del(s_arr a)
 {
     int i;
-
     for (i = 0; i < a.len; i++) {
-        a.strs[i][0] = '\0';
+        free(a.strs[i]);
     }
+    free(a.strs);
 }
 
 
@@ -182,11 +180,14 @@ static void s_arr_del(s_arr a)
  */
 static bool s_arr_push(char *val, s_arr *sa) {
     char **tmp;
-    char   buf[NUM_BUF_SZ];
     int    i;
+#ifdef R_RRD_DBG    
+    char   buf[NUM_BUF_SZ+1];
+#endif
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "s_arr_push: n=%d val=%s", sa->len, val);
+    snprintf(buf, NUM_BUF_SZ, "s_arr_push: n=%d val=%s", sa->len, val);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif          
     
@@ -206,11 +207,13 @@ static bool s_arr_push(char *val, s_arr *sa) {
     sa->strs = tmp;
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "s_arr_push: len -> %d", sa->len);
+    snprintf(buf, NUM_BUF_SZ, "s_arr_push: len -> %d", sa->len);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
     for (i = 0; i < sa->len; i++) {
-        sprintf(buf, "s_arr_add: s_arr[%d] -> %s", i, sa->strs[i]);
-        _dbug(R_RRD_DEBUG_SIM, buf);
+       snprintf(buf, NUM_BUF_SZ, "s_arr_add: s_arr[%d] -> %s", i, sa->strs[i]);
+       buf[NUM_BUF_SZ] = 0;
+       _dbug(R_RRD_DEBUG_SIM, buf);
     }
 #endif
     return true;
@@ -232,14 +235,14 @@ static void reset_rrd_state()
  * Document-method: create
  *
  *   call-seq:
- *     RRD.create(filename, pdp_step, last_up, arg_array) -> [Qnil|Qtrue]
+ *     rrd.create(pdp_step, last_up, arg_array) -> [Qnil|Qtrue]
  * 
  * The create function of RRDtool lets you set up new Round Robin 
  * Database (RRD) files. The file is created at its final, full size 
  * and filled with *UNKNOWN* data.
  *
  * create filename [--start|-b start time] [--step|-s step] 
- *        [DS:ds-name:DST:heartbeat:min:max] [RRA:CF:xff:steps:rows
+ *        [DS:ds-name:DST:heartbeat:min:max] [RRA:CF:xff:steps:rows]
  * 
  * 
  *  filename
@@ -279,14 +282,17 @@ static void reset_rrd_state()
  */
 VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
 {
-    s_arr          a;        /* varargs in the form of a string array */
+    s_arr         a;        /* varargs in the form of a string array */
     VALUE          rval;     /* our result */
     VALUE          rrd;      /* name of the RRD file to create */
     unsigned long  pdp_step; /* the stepping time interval */
     time_t         last_up;  /* last update time */
 #ifdef R_RRD_DBG    
-    char           buf[254]; 
+    char   buf[NUM_BUF_SZ+1];
 #endif
+    int result;
+    
+    reset_rrd_state();
     
     rrd = rb_iv_get(self, "@rrdname");
     
@@ -298,24 +304,26 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
     pdp_step = NUM2ULONG(ostep);
     last_up  = (time_t)NUM2ULONG(update);
 #ifdef R_RRD_DBG    
-    sprintf(buf, "n=[%s] : step=%u : up=%u", STR2CSTR(rrd), 
-            pdp_step, (unsigned int)last_up);
+    snprintf(buf, NUM_BUF_SZ, "n=[%s] : step=%u : up=%u", STR2CSTR(rrd),
+             pdp_step, (unsigned int)last_up);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     a = s_arr_new(self, false, false, args);
     _dbug(R_RRD_DEBUG_SIM, "call");
     
     /* now run the command */
-    if (rrd_create_r(STR2CSTR(rrd), pdp_step, last_up, 
-                     a.len, a.strs) == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); 
-        rrd_clear_error();
+    result = rrd_create_r(STR2CSTR(rrd), pdp_step, last_up, a.len, a.strs);
+
+    _dbug(R_RRD_DEBUG_SIM, "cleanup");
+    s_arr_del(a);
+
+    if (result == -1) {
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = Qtrue;
     }
-    _dbug(R_RRD_DEBUG_SIM, "cleanup");
-    s_arr_del(a);
     return rval;
 }
 
@@ -324,10 +332,10 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
  * Document-method: dump
  *
  *   call-seq:
- *     rrd.dump(filename) -> [Qnil|Qtrue]
+ *     rrd.dump -> [Qnil|Qtrue]
  * 
  * The dump function prints the contents of an RRD in human readable (?) 
- * XML format. This format can be read by rrdrestore. Together they allow 
+ * XML format. This format can be read by rrd_restore. Together they allow 
  * you to transfer your files from one computer architecture to another 
  * as well to manipulate the contents of an RRD file in a somewhat more 
  * convenient manner.
@@ -346,11 +354,12 @@ VALUE rrdtool_dump(VALUE self)
     VALUE   rval;       /* our result */
     VALUE   rrd;    /* rrd database filename */
     
+    reset_rrd_state();
+    
     rrd = rb_iv_get(self, "@rrdname");
      
     if (rrd_dump_r(STR2CSTR(rrd)) == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-        rrd_clear_error();
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = Qtrue;
@@ -382,8 +391,10 @@ VALUE rrdtool_first(VALUE self, VALUE orra_idx)
     int     idx;    /* index in integer form */
     time_t  when;   /* the found value */
 #ifdef R_RRD_DBG    
-    char    buf[254]; 
+    char   buf[NUM_BUF_SZ+1];
 #endif
+    
+    reset_rrd_state();
     
     rrd = rb_iv_get(self, "@rrdname");
     if (orra_idx == Qnil) {  idx = 0; }
@@ -394,16 +405,16 @@ VALUE rrdtool_first(VALUE self, VALUE orra_idx)
     
     when = rrd_first_r(STR2CSTR(rrd), idx);
     if (when == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-        rrd_clear_error();
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = ULL2NUM(when);
     }
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "first: rrd=[%s] : idx=%d : val=%ul", 
-            STR2CSTR(rrd), idx, (unsigned long)when);
+    snprintf(buf, NUM_BUF_SZ, "first: rrd=[%s] : idx=%d : val=%ul",
+             STR2CSTR(rrd), idx, (unsigned long)when);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     return rval;
@@ -428,23 +439,25 @@ VALUE rrdtool_last(VALUE self)
     VALUE   rrd;    /* rrd database filename */
     time_t  when;   /* the found value */
 #ifdef R_RRD_DBG    
-    char    buf[254]; 
+    char    buf[NUM_BUF_SZ+1];
 #endif
+    
+    reset_rrd_state();
     
     rrd = rb_iv_get(self, "@rrdname");
     
     when = rrd_last_r(STR2CSTR(rrd));
     if (when == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-        rrd_clear_error();
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = ULL2NUM(when);
     }
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "last: rrd=[%s] : val=%ul", 
-            STR2CSTR(rrd), (unsigned long)when);
+    snprintf(buf, NUM_BUF_SZ, "last: rrd=[%s] : val=%ul",
+             STR2CSTR(rrd), (unsigned long)when);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     return rval;
@@ -465,14 +478,17 @@ VALUE rrdtool_version(VALUE self)
     VALUE   rval;   /* our result */
     double  vers;   /* version number */
 #ifdef R_RRD_DBG    
-    char    buf[254]; 
+    char    buf[NUM_BUF_SZ+1];
 #endif
+    
+    reset_rrd_state();
     
     vers = rrd_version();
     rval = rb_float_new(vers);
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "version: val=%f", vers);
+    snprintf(buf, NUM_BUF_SZ, "version: val=%f", vers);
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     return rval;
@@ -484,7 +500,7 @@ VALUE rrdtool_version(VALUE self)
  * Document-method: update
  * 
  * call-seq:
- *   RRD.update(filename, template, arg_array) -> [Qnil|Qtrue]
+ *   rrd.update(template, arg_array) -> [Qnil|Qtrue]
  *
  * The update function feeds new data values into an RRD. The data is time aligned 
  *  (interpolated) according to the properties of the RRD to which the data is written.
@@ -541,8 +557,12 @@ VALUE rrdtool_update(VALUE self, VALUE otemp, VALUE args)
     VALUE   rrd;      /* name of the RRD file to create */
     VALUE   tmpl;     /* DS template */
 #ifdef R_RRD_DBG    
-    char    buf[254]; 
+    char    buf[NUM_BUF_SZ+1];
 #endif
+    int result;
+    
+    reset_rrd_state();
+    
     rrd = rb_iv_get(self, "@rrdname");
     
     /* initial type checking */
@@ -550,20 +570,23 @@ VALUE rrdtool_update(VALUE self, VALUE otemp, VALUE args)
     tmpl = StringValue(otemp);
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "n=[%s] : temp=%s", STR2CSTR(rrd), STR2CSTR(tmpl));
+    snprintf(buf, NUM_BUF_SZ, "n=[%s] : tmpl=%s", STR2CSTR(rrd), STR2CSTR(tmpl));
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     a = s_arr_new(self, false, false, args);
     
     /* now run the command */
-    if (rrd_update_r(STR2CSTR(rrd), STR2CSTR(tmpl), a.len, a.strs) == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-        rrd_clear_error();
+    result = rrd_update_r(STR2CSTR(rrd), STR2CSTR(tmpl), a.len, a.strs);
+    /* cleanup */
+    s_arr_del(a);
+
+    if (result == -1) {
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = Qtrue;
     }
-    s_arr_del(a);
     return rval;
 }
 
@@ -579,20 +602,26 @@ VALUE rrdtool_call(VALUE self, RRDtoolFUNC fn, VALUE args)
     s_arr     a;        /* varargs in the form of a string array */
     VALUE     rval;     /* our result */
 #ifdef R_RRD_DBG    
-    char      buf[254]; 
+    char     buf[NUM_BUF_SZ+1];
 #endif
+    int result;
+    
+    reset_rrd_state();
     
     a = s_arr_new(self, true, false, args);
     
     /* now run the command */
-    if (fn(a.len, (char**)&a.strs) == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-        rrd_clear_error();
+    result = fn(a.len, a.strs);
+
+    /* cleanup */
+    s_arr_del(a);
+
+    if (result == -1) {
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = Qtrue;
     }
-    s_arr_del(a);
     return rval;
 }
 
@@ -647,7 +676,7 @@ VALUE rrdtool_tune(VALUE self, VALUE args)
  */
 VALUE rrdtool_resize(VALUE self, VALUE args)
 {
-    return rrd_call(self, rrd_resize, args);
+    return rrdtool_call(self, rrd_resize, args);
 }
 
 
@@ -666,8 +695,12 @@ VALUE rrdtool_restore(VALUE self, VALUE oxml, VALUE orrd, VALUE args)
     VALUE   rrd;      /* name of the RRD file to create */
     VALUE   xml;      /* XML template */
 #ifdef R_RRD_DBG    
-    char    buf[254]; 
+    char    buf[NUM_BUF_SZ+1];
 #endif
+    int result;
+    
+    reset_rrd_state();
+    
     rrd = rb_iv_get(self, "@rrdname");
     
     /* initial type checking */
@@ -677,7 +710,9 @@ VALUE rrdtool_restore(VALUE self, VALUE oxml, VALUE orrd, VALUE args)
     rrd = StringValue(orrd);
     
 #ifdef R_RRD_DBG    
-    sprintf(buf, "restore: xml=%s rrd=%s", STR2CSTR(xml), STR2CSTR(rrd));
+    snprintf(buf, NUM_BUF_SZ, "restore: xml=%s rrd=%s",
+             STR2CSTR(xml), STR2CSTR(rrd));
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     a = s_arr_new(self, false, false, args);
@@ -686,14 +721,17 @@ VALUE rrdtool_restore(VALUE self, VALUE oxml, VALUE orrd, VALUE args)
     s_arr_push(STR2CSTR(xml), &a);
     
     /* now run the command */
-    if (rrd_restore(a.len, a.strs) == -1) {
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); \
-        rrd_clear_error();
+    result = rrd_restore(a.len, a.strs);
+
+    /* cleanup */
+    s_arr_del(a);
+
+    if (result == -1) {
+        RRD_RAISE;
         rval = Qnil;
     } else {
         rval = Qtrue;
     }
-    s_arr_del(a);
     return rval;
 }
 
@@ -732,54 +770,56 @@ VALUE rrdtool_fetch(VALUE self, VALUE args)
     unsigned long i, j, k, step, ds_cnt;
     rrd_value_t  *rrd_data;
     char        **ds_names;
-    VALUE         data, names, rval;
+    VALUE         data, names, rval = Qnil;
     time_t        start, end;
 #ifdef R_RRD_DBG    
-    char           buf[254]; 
+    char buf[NUM_BUF_SZ+1];
 #endif
+    
+    reset_rrd_state();
     
     a = s_arr_new(self, true, true, args);
     
-    if (rrd_fetch(a.len, a.strs, &start, &end, &step, 
-                  &ds_cnt, &ds_names, &rrd_data) == -1) { 
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); 
-        rrd_clear_error();
-        rval = Qnil;
-    } else {
-        s_arr_del(a);
+    rrd_fetch(a.len, a.strs, &start, &end, &step, 
+              &ds_cnt, &ds_names, &rrd_data);
 
-        /* process the data .. get the names first */
-        names = rb_ary_new();
-        for (i = 0; i < ds_cnt; i++) {
-            rb_ary_push(names, rb_str_new2(ds_names[i]));
+    s_arr_del(a);
+
+    RRD_CHECK_ERROR;
+
+    /* process the data .. get the names first */
+    names = rb_ary_new();
+    for (i = 0; i < ds_cnt; i++) {
+        rb_ary_push(names, rb_str_new2(ds_names[i]));
 #ifdef R_RRD_DBG    
-            sprintf(buf, "fetch: names: n=[%s]", ds_names[i]);
-            _dbug(R_RRD_DEBUG_SIM, buf);
+        snprintf(buf, NUM_BUF_SZ, "fetch: names: n=[%s]", ds_names[i]);
+        buf[NUM_BUF_SZ] = 0;
+        _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
-            free(ds_names[i]);
-        }
-        free(ds_names);
-    
-        /* step over the 2d array containing the data */
-        k = 0;
-        data = rb_ary_new();
-        for (i = start; i <= end; i += step) {
-            VALUE line = rb_ary_new2(ds_cnt);
-            for (j = 0; j < ds_cnt; j++) {
-                rb_ary_store(line, j, rb_float_new(rrd_data[k]));
-                k++;
-            }
-            rb_ary_push(data, line);
-        }
-        free(rrd_data);
-        
-        /* now prepare an array for ruby to chew on .. */
-        rval = rb_ary_new2(4);
-        rb_ary_store(rval, 0, INT2FIX(start));
-        rb_ary_store(rval, 1, INT2FIX(end));
-        rb_ary_store(rval, 2, names);
-        rb_ary_store(rval, 3, data);
+        free(ds_names[i]);
     }
+    free(ds_names);
+    
+    /* step over the 2d array containing the data */
+    k = 0;
+    data = rb_ary_new();
+    for (i = start; i <= end; i += step) {
+        VALUE line = rb_ary_new2(ds_cnt);
+        for (j = 0; j < ds_cnt; j++) {
+            rb_ary_store(line, j, rb_float_new(rrd_data[k]));
+            k++;
+        }
+        rb_ary_push(data, line);
+    }
+    free(rrd_data);
+    
+    /* now prepare an array for ruby to chew on .. */
+    rval = rb_ary_new2(4);
+    rb_ary_store(rval, 0, INT2FIX(start));
+    rb_ary_store(rval, 1, INT2FIX(end));
+    rb_ary_store(rval, 2, names);
+    rb_ary_store(rval, 3, data);
+
     return rval;
 }
 
@@ -832,56 +872,58 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
     unsigned long i, j, k, step, col_cnt;
     rrd_value_t  *rrd_data;
     char        **legend_v;
-    VALUE         data, legends, rval;
+    VALUE         data, legends, rval = Qnil;
     time_t        start, end;
 #ifdef R_RRD_DBG    
-    char           buf[254]; 
+    char          buf[NUM_BUF_SZ+1];
 #endif
+    
+    reset_rrd_state();
     
     a = s_arr_new(self, false, true, args);
     
-    if (rrd_xport(a.len, a.strs, 0, &start, &end, &step, 
-                  &col_cnt, &legend_v, &rrd_data) == -1) { 
-        rb_raise(rb_eRRDtoolError, rrd_get_error()); 
-        rrd_clear_error();
-        rval = Qnil;
-    } else {
-        s_arr_del(a);
+    rrd_xport(a.len, a.strs, 0, &start, &end, &step, 
+              &col_cnt, &legend_v, &rrd_data);
 
-        /* process the data .. get the legends first */
-        legends = rb_ary_new();
-        for (i = 0; i < col_cnt; i++) {
-            rb_ary_push(legends, rb_str_new2(legend_v[i]));
-#ifdef R_RRD_DBG    
-            sprintf(buf, "xport: names: n=[%s]", legend_v[i]);
-            _dbug(R_RRD_DEBUG_SIM, buf);
-#endif
-            free(legend_v[i]);
-        }
-        free(legends);
+    s_arr_del(a);
+
+    RRD_CHECK_ERROR;
     
-        /* step over the 2d array containing the data */
-        k = 0;
-        data = rb_ary_new();
-        for (i = start; i <= end; i += step) {
-            VALUE line = rb_ary_new2(col_cnt);
-            for (j = 0; j < col_cnt; j++) {
-                rb_ary_store(line, j, rb_float_new(rrd_data[k]));
-                k++;
-            }
-            rb_ary_push(data, line);
-        }
-        free(rrd_data);
-        
-        /* now prepare an array for ruby to chew on .. */
-        rval = rb_ary_new2(6);
-        rb_ary_store(rval, 0, INT2FIX(start));
-        rb_ary_store(rval, 1, INT2FIX(end));
-        rb_ary_store(rval, 2, INT2FIX(step));
-        rb_ary_store(rval, 3, INT2FIX(col_cnt));
-        rb_ary_store(rval, 4, legends);
-        rb_ary_store(rval, 5, data);
+    /* process the data .. get the legends first */
+    legends = rb_ary_new();
+    for (i = 0; i < col_cnt; i++) {
+        rb_ary_push(legends, rb_str_new2(legend_v[i]));
+#ifdef R_RRD_DBG    
+        snprintf(buf, NUM_BUF_SZ, "xport: names: n=[%s]", legend_v[i]);
+        buf[NUM_BUF_SZ] = 0;
+        _dbug(R_RRD_DEBUG_SIM, buf);
+#endif
+        free(legend_v[i]);
     }
+    free(legend_v);
+    
+    /* step over the 2d array containing the data */
+    k = 0;
+    data = rb_ary_new();
+    for (i = start; i <= end; i += step) {
+        VALUE line = rb_ary_new2(col_cnt);
+        for (j = 0; j < col_cnt; j++) {
+            rb_ary_store(line, j, rb_float_new(rrd_data[k]));
+            k++;
+        }
+        rb_ary_push(data, line);
+    }
+    free(rrd_data);
+    
+    /* now prepare an array for ruby to chew on .. */
+    rval = rb_ary_new2(6);
+    rb_ary_store(rval, 0, INT2FIX(start));
+    rb_ary_store(rval, 1, INT2FIX(end));
+    rb_ary_store(rval, 2, INT2FIX(step));
+    rb_ary_store(rval, 3, INT2FIX(col_cnt));
+    rb_ary_store(rval, 4, legends);
+    rb_ary_store(rval, 5, data);
+
     return rval;
 }
 
@@ -891,10 +933,9 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
  * Document-method: graph
  * 
  * call-seq:
- *   RRD.update(filename, template, arg_array) -> [Qnil|Qtrue]
+ *   RRD.graph(arg_array) -> [Qnil|Qtrue]
  *
- * The update function feeds new data values into an RRD. The data is time aligned 
- *  (interpolated) according to the properties of the RRD to which the data is written.
+ * The graph function generates an image from the data values in an RRD.
  *
  *
  */
@@ -906,13 +947,16 @@ VALUE rrdtool_graph(VALUE self, VALUE args)
     int    i, xsize, ysize;
     double ymin, ymax;
     
-    a = s_arr_new(self, false, true, args);
+    reset_rrd_state();
+    
+    a = s_arr_new(self, true, false, args);
+    
     rrd_graph(a.len, a.strs, &calcpr, &xsize, &ysize, NULL, &ymin, &ymax);
 
-    RRD_CHECK_ERROR
-              
     s_arr_del(a);
 
+    RRD_CHECK_ERROR;
+              
     result = rb_ary_new2(3);
     print_results = rb_ary_new();
     p = calcpr;
@@ -945,13 +989,15 @@ VALUE rrdtool_info(VALUE self)
     VALUE   rval;       /* our result */
     info_t *data, *p;   /* this is what rrd_info()returns */
 #ifdef R_RRD_DBG    
-    char    buf[254]; 
+    char    buf[NUM_BUF_SZ+1];
 #endif
 
+    reset_rrd_state();
+    
     rrd = rb_iv_get(self, "@rrdname");
     data = rrd_info_r(STR2CSTR(rrd));
 
-    RRD_CHECK_ERROR
+    RRD_CHECK_ERROR;
 
     rval = rb_hash_new();
     while (data) {
@@ -998,14 +1044,15 @@ static VALUE rrdtool_rrdname(VALUE self) {
  */
 static VALUE rrdtool_initialize(VALUE self, VALUE ofname) {
 #ifdef R_RRD_DBG    
-    char buf[254];
+    char  buf[NUM_BUF_SZ+1];
 #endif
     VALUE rrdname;
     
     rrdname = StringValue(ofname);
     rb_iv_set(self, "@rrdname", rrdname);
 #ifdef R_RRD_DBG    
-    sprintf(buf, "rrdname=[%s]", STR2CSTR(rrdname));
+    snprintf(buf, NUM_BUF_SZ, "rrdname=[%s]", STR2CSTR(rrdname));
+    buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     return self;
