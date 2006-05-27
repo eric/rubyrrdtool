@@ -9,12 +9,15 @@ require 'RRDtool'
 class TestRRDtool < Test::Unit::TestCase
   def setup
     @f = 'test.rrd'
+    @g = (File.basename @f, '.rrd') + '.png'
     File.delete @f if File.exists? @f
+    File.delete @g if File.exists? @g
     @r = RRDtool.new @f
   end
   
   def teardown
     File.delete @f if File.exists? @f
+    # note: leave the graph file around to check it by hand
     @r = nil
   end
   
@@ -42,19 +45,56 @@ class TestRRDtool < Test::Unit::TestCase
   end
 
   def test_dump
-    raise NotImplementedError, 'Need to write test_dump'
+    flunk # argh! dump goes directly to stdout, does not pass go
   end
 
   def test_fetch
-    raise NotImplementedError, 'Need to write test_fetch'
+    assert_raise RRDtoolError do
+      @r.fetch ["AVERAGE"]
+    end
+    create_file
+    create_data
+    fary = @r.fetch ["AVERAGE"]
+    assert_not_nil fary
+    assert !fary.empty?
+    #assert_equals expected_data_points, fary[3]
+    # LATER: test rrd.fetch ["AVERAGE", "LAST"]
   end
 
   def test_first
-    raise NotImplementedError, 'Need to write test_first'
+    # first and last should raise an exception without an RRD file
+    assert_raise RRDtoolError do
+      @r.first 0
+    end
+    create_file
+    (0..1).each do |i|
+      f = @r.first i
+      assert_not_nil f
+      assert_instance_of Bignum, f
+      assert f > 0
+    end
+    assert_raise RRDtoolError do
+      f2 = @r.first 2
+    end
   end
 
   def test_graph
-    raise NotImplementedError, 'Need to write test_graph'
+    create_file
+    create_data
+    @r.graph(
+        [@g, "--title", " RubyRRD Demo", 
+        "--start", "#{@start} + 1 h",
+        "--end", "#{@start} + 1000 min",
+        "--interlace", 
+        "--imgformat", "PNG",
+        "--width=450",
+        "DEF:a=#{@r.rrdname}:a:AVERAGE",
+        "DEF:b=#{@r.rrdname}:b:AVERAGE",
+        "CDEF:line=TIME,2400,%,300,LT,a,UNKN,IF",
+        "AREA:b#00b6e4:beta",
+        "AREA:line#0022e9:alpha",
+        "LINE3:line#ff0000"])
+    assert File.exists?(@g)
   end
 
   def test_info
@@ -66,11 +106,18 @@ class TestRRDtool < Test::Unit::TestCase
   end
 
   def test_last
+    # first and last should raise an exception without an RRD file
+    assert_raise RRDtoolError do
+      @r.last
+    end
     create_file
+    l = @r.last
+    assert_instance_of Bignum, l
+    assert_equal @start, l
     create_data
     l = @r.last
     assert_instance_of Bignum, l
-    assert l > 0
+    assert l > @start
   end
 
   def test_resize
