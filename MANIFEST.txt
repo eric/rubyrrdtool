@@ -1,0 +1,10 @@
+README
+MANIFEST.txt
+Rakefile
+extconf.rb
+examples/*.rb
+test/*.rb
+orig/*
+play/*
+rrd_addition.h
+rubyrrdtool.c
