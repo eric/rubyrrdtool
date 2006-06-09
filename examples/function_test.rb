@@ -1,8 +1,12 @@
 #!/usr/bin/env ruby
-# $Id: test.rb,v 1.1 2005/08/04 01:16:07 probertm Exp $
+# $Id: function_test.rb,v 1.1 2006/06/09 22:54:22 dbach Exp $
 # Driver does not carry cash.
 
-require "RRDtool"
+# insert the lib directory at the front of the path to pick up 
+# the latest build -- useful for testing during development 
+$:.unshift '../lib'
+
+require 'RRDtool'
 
 name    = "test"
 rrdname = "#{name}.rrd"
