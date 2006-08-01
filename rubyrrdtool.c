@@ -1,6 +1,6 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2006/05/26 19:37:48 $
+ * date:   $Date: 2006/08/01 06:53:35 $
  * init:   2005-07-26
  * vers:   $Version$
  * auth:   $Author: dbach $
@@ -815,8 +815,8 @@ VALUE rrdtool_fetch(VALUE self, VALUE args)
     
     /* now prepare an array for ruby to chew on .. */
     rval = rb_ary_new2(4);
-    rb_ary_store(rval, 0, INT2FIX(start));
-    rb_ary_store(rval, 1, INT2FIX(end));
+    rb_ary_store(rval, 0, INT2NUM(start));
+    rb_ary_store(rval, 1, INT2NUM(end));
     rb_ary_store(rval, 2, names);
     rb_ary_store(rval, 3, data);
 
@@ -917,10 +917,10 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
     
     /* now prepare an array for ruby to chew on .. */
     rval = rb_ary_new2(6);
-    rb_ary_store(rval, 0, INT2FIX(start));
-    rb_ary_store(rval, 1, INT2FIX(end));
-    rb_ary_store(rval, 2, INT2FIX(step));
-    rb_ary_store(rval, 3, INT2FIX(col_cnt));
+    rb_ary_store(rval, 0, INT2NUM(start));
+    rb_ary_store(rval, 1, INT2NUM(end));
+    rb_ary_store(rval, 2, UINT2NUM(step));
+    rb_ary_store(rval, 3, UINT2NUM(col_cnt));
     rb_ary_store(rval, 4, legends);
     rb_ary_store(rval, 5, data);
 
@@ -967,8 +967,8 @@ VALUE rrdtool_graph(VALUE self, VALUE args)
     free(calcpr);
     
     rb_ary_store(result, 0, print_results);
-    rb_ary_store(result, 1, INT2FIX(xsize));
-    rb_ary_store(result, 2, INT2FIX(ysize));
+    rb_ary_store(result, 1, INT2NUM(xsize));
+    rb_ary_store(result, 2, INT2NUM(ysize));
     return result;
 }
 
@@ -1012,7 +1012,7 @@ VALUE rrdtool_info(VALUE self)
             }
             break;
         case RD_I_CNT:
-            rb_hash_aset(rval, key, INT2FIX(data->value.u_cnt));
+            rb_hash_aset(rval, key, UINT2NUM(data->value.u_cnt));
             break;
         case RD_I_STR:
             rb_hash_aset(rval, key, rb_str_new2(data->value.u_str));
