@@ -70,7 +70,6 @@ class TestRRDtool < Test::Unit::TestCase
     (0..1).each do |i|
       f = @r.first i
       assert_not_nil f
-      assert_instance_of Bignum, f
       assert f > 0
     end
     assert_raise RRDtoolError do
@@ -112,11 +111,10 @@ class TestRRDtool < Test::Unit::TestCase
     end
     create_file
     l = @r.last
-    assert_instance_of Bignum, l
+    assert l > 0
     assert_equal @start, l
     create_data
     l = @r.last
-    assert_instance_of Bignum, l
     assert l > @start
   end
 
