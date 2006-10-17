@@ -80,15 +80,15 @@ class TestRRDtool < Test::Unit::TestCase
   def test_graph
     create_file
     create_data
-    @r.graph(
+    RRDtool.graph(
         [@g, "--title", " RubyRRD Demo", 
         "--start", "#{@start} + 1 h",
         "--end", "#{@start} + 1000 min",
         "--interlace", 
         "--imgformat", "PNG",
         "--width=450",
-        "DEF:a=#{@r.rrdname}:a:AVERAGE",
-        "DEF:b=#{@r.rrdname}:b:AVERAGE",
+        "DEF:a=#{@f}:a:AVERAGE",
+        "DEF:b=#{@f}:b:AVERAGE",
         "CDEF:line=TIME,2400,%,300,LT,a,UNKN,IF",
         "AREA:b#00b6e4:beta",
         "AREA:line#0022e9:alpha",
@@ -148,8 +148,7 @@ class TestRRDtool < Test::Unit::TestCase
   end
 
   def test_version
-    r = RRDtool.new 'foo'
-    v = r.version
+    v = RRDtool.version
     assert_instance_of Float, v
     assert_not_nil v
   end
