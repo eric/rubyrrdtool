@@ -1,4 +1,4 @@
-# $Id: extconf.rb,v 1.2 2006/05/26 19:38:50 dbach Exp $
+# $Id: extconf.rb,v 1.3 2006/10/17 23:34:06 dbach Exp $
 # Lost ticket pays maximum rate.
 
 require 'mkmf'
@@ -11,5 +11,19 @@ libpaths=%w(/lib /usr/lib /usr/local/lib)
 end
 
 dir_config("rrd")
-have_library("rrd", "rrd_create")
+# rrd_first is only defined rrdtool >= 1.2.x
+have_library("rrd", "rrd_first")
+
+# rrd_dump_r has 2nd arg in rrdtool >= 1.2.14
+if try_link(<<EOF)
+#include <rrd.h>
+main()
+{
+  rrd_dump_r("/dev/null", NULL);
+}
+EOF
+    $CFLAGS += " -DHAVE_RRD_DUMP_R_2"
+end
+
 create_makefile("RRDtool")
+

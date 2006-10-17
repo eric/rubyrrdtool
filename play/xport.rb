@@ -7,14 +7,14 @@ name    = "minmax"
 rrdname = "randome.rrd"
 start   = Time.now.to_i
 
-rrd = RRDtool.new(rrdname)
-puts "created new RRD database -> #{rrd.rrdname}"
+#rrd = RRDtool.new(rrdname)
+#puts "created new RRD database -> #{rrd.rrdname}"
 
 # ---------------------------------------------
 #           Update
 # ---------------------------------------------
 puts " .. fetching #{rrdname}"
-(start, stop, step, cols, legends, data) = rrd.xport(["-m", 400,
+(start, stop, step, cols, legends, data) = RRDtool.xport(["-m", 400,
                "--start", "now-1day",
                "--end", "now",
                "DEF:alpha=#{rrdname}:a:AVERAGE",

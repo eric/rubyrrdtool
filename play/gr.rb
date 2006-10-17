@@ -6,14 +6,14 @@ name    = "minmax"
 rrdname = "randome.rrd"
 start   = Time.now.to_i
 
-rrd = RRDtool.new(rrdname)
-puts "created new RRD database -> #{rrd.rrdname}"
+# rrd = RRDtool.new(rrdname)
+# puts "created new RRD database -> #{rrd.rrdname}"
 
 # ---------------------------------------------
 #           Graph
 # ---------------------------------------------
 puts "generating graph #{name}.png"
-rrd.graph(
+RRDtool.graph(
    ["#{name}.png",
     "DEF:a=#{rrdname}:a:AVERAGE",
     "DEF:b=#{rrdname}:a:MIN",

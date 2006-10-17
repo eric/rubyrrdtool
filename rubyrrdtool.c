@@ -1,6 +1,6 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2006/08/01 06:53:35 $
+ * date:   $Date: 2006/10/17 23:34:06 $
  * init:   2005-07-26
  * vers:   $Version$
  * auth:   $Author: dbach $
@@ -19,6 +19,7 @@
 
 #include <unistd.h>
 #include <stdbool.h>
+#include <math.h>   /* for isnan */
 #include <ruby.h>
 #include <rrd.h>
 #include "rrd_addition.h"
@@ -27,7 +28,7 @@
 #define  R_RRD_DEBUG_OFF 0  /* no debugging   */
 #define  R_RRD_DEBUG_SIM 1  /* basic debug    */
 #define  R_RRD_DEBUG_DET 2  /* more details   */
-#define  R_RRD_DBG       R_RRD_DEBUG_OFF
+#undef  R_RRD_DBG
 
 #ifdef R_RRD_DBG
 void _dbug(int level, char *s) {
@@ -127,6 +128,8 @@ static s_arr s_arr_new(VALUE self, bool name_f, bool dummy_f, VALUE strs)
         switch (TYPE(v)) {
         case T_BIGNUM:
         case T_FIXNUM:
+            v = rb_obj_as_string(v);
+            /* FALLTHROUGH */
         case T_STRING:
             a.strs[i] = strdup(StringValuePtr(v));
 #ifdef R_RRD_DBG    
@@ -296,13 +299,9 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
     
     rrd = rb_iv_get(self, "@rrdname");
     
-    /* initial type checking */
-    Check_Type(ostep, T_FIXNUM);
-    Check_Type(update, T_BIGNUM);
-    
     /* conversion ... */
-    pdp_step = NUM2ULONG(ostep);
-    last_up  = (time_t)NUM2ULONG(update);
+    pdp_step = NUM2LONG(ostep);
+    last_up  = (time_t)NUM2LONG(update);
 #ifdef R_RRD_DBG    
     snprintf(buf, NUM_BUF_SZ, "n=[%s] : step=%u : up=%u", STR2CSTR(rrd),
              pdp_step, (unsigned int)last_up);
@@ -310,12 +309,16 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
     a = s_arr_new(self, false, false, args);
+#ifdef R_RRD_DBG
     _dbug(R_RRD_DEBUG_SIM, "call");
+#endif
     
     /* now run the command */
     result = rrd_create_r(STR2CSTR(rrd), pdp_step, last_up, a.len, a.strs);
 
+#ifdef R_RRD_DBG
     _dbug(R_RRD_DEBUG_SIM, "cleanup");
+#endif
     s_arr_del(a);
 
     if (result == -1) {
@@ -351,6 +354,7 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
  */
 VALUE rrdtool_dump(VALUE self)
 {
+    int     ret;    /* result of rrd_dump_r */
     VALUE   rval;       /* our result */
     VALUE   rrd;    /* rrd database filename */
     
@@ -358,7 +362,13 @@ VALUE rrdtool_dump(VALUE self)
     
     rrd = rb_iv_get(self, "@rrdname");
      
-    if (rrd_dump_r(STR2CSTR(rrd)) == -1) {
+#ifdef HAVE_RRD_DUMP_R_2
+    ret = rrd_dump_r(STR2CSTR(rrd), NULL);
+#else
+    ret = rrd_dump_r(STR2CSTR(rrd));
+#endif
+
+    if (ret == -1) {
         RRD_RAISE;
         rval = Qnil;
     } else {
@@ -399,8 +409,7 @@ VALUE rrdtool_first(VALUE self, VALUE orra_idx)
     rrd = rb_iv_get(self, "@rrdname");
     if (orra_idx == Qnil) {  idx = 0; }
     else {
-        Check_Type(orra_idx, T_FIXNUM);
-        idx = FIX2INT(orra_idx);
+        idx = NUM2INT(orra_idx);
     }
     
     when = rrd_first_r(STR2CSTR(rrd), idx);
@@ -408,7 +417,7 @@ VALUE rrdtool_first(VALUE self, VALUE orra_idx)
         RRD_RAISE;
         rval = Qnil;
     } else {
-        rval = ULL2NUM(when);
+        rval = LONG2NUM(when);
     }
     
 #ifdef R_RRD_DBG    
@@ -451,7 +460,7 @@ VALUE rrdtool_last(VALUE self)
         RRD_RAISE;
         rval = Qnil;
     } else {
-        rval = ULL2NUM(when);
+        rval = LONG2NUM(when);
     }
     
 #ifdef R_RRD_DBG    
@@ -601,7 +610,7 @@ VALUE rrdtool_call(VALUE self, RRDtoolFUNC fn, VALUE args)
 {
     s_arr     a;        /* varargs in the form of a string array */
     VALUE     rval;     /* our result */
-#ifdef R_RRD_DBG    
+#ifdef R_RRD_DBG
     char     buf[NUM_BUF_SZ+1];
 #endif
     int result;
@@ -815,8 +824,8 @@ VALUE rrdtool_fetch(VALUE self, VALUE args)
     
     /* now prepare an array for ruby to chew on .. */
     rval = rb_ary_new2(4);
-    rb_ary_store(rval, 0, INT2NUM(start));
-    rb_ary_store(rval, 1, INT2NUM(end));
+    rb_ary_store(rval, 0, LONG2NUM(start));
+    rb_ary_store(rval, 1, LONG2NUM(end));
     rb_ary_store(rval, 2, names);
     rb_ary_store(rval, 3, data);
 
@@ -829,7 +838,7 @@ VALUE rrdtool_fetch(VALUE self, VALUE args)
  * Document-method: xport
  * 
  * call-seq:
- *   rrd.xport(str_array) -> (start, end, step, col_cnt, legend, data)
+ *   RRDtool.xport(str_array) -> (start, end, step, col_cnt, legend, data)
  * 
  * The xport function's main purpose is to write an XML formatted 
  * representation of the data stored in one or several RRDs. It can 
@@ -917,8 +926,8 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
     
     /* now prepare an array for ruby to chew on .. */
     rval = rb_ary_new2(6);
-    rb_ary_store(rval, 0, INT2NUM(start));
-    rb_ary_store(rval, 1, INT2NUM(end));
+    rb_ary_store(rval, 0, LONG2NUM(start));
+    rb_ary_store(rval, 1, LONG2NUM(end));
     rb_ary_store(rval, 2, UINT2NUM(step));
     rb_ary_store(rval, 3, UINT2NUM(col_cnt));
     rb_ary_store(rval, 4, legends);
@@ -933,7 +942,7 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
  * Document-method: graph
  * 
  * call-seq:
- *   RRD.graph(arg_array) -> [Qnil|Qtrue]
+ *   RRDtool.graph(arg_array) -> [Qnil|Qtrue]
  *
  * The graph function generates an image from the data values in an RRD.
  *
@@ -944,12 +953,12 @@ VALUE rrdtool_graph(VALUE self, VALUE args)
     s_arr  a;
     char **calcpr, **p;
     VALUE  result, print_results;
-    int    i, xsize, ysize;
+    int    xsize, ysize;
     double ymin, ymax;
     
     reset_rrd_state();
     
-    a = s_arr_new(self, true, false, args);
+    a = s_arr_new(self, false, true, args);
     
     rrd_graph(a.len, a.strs, &calcpr, &xsize, &ysize, NULL, &ymin, &ymax);
 
@@ -1072,9 +1081,7 @@ void Init_RRDtool()
     rb_define_method(cRRDtool, "rrdname",    rrdtool_rrdname, 0);
     rb_define_method(cRRDtool, "create",     rrdtool_create, 3);
     rb_define_method(cRRDtool, "update",     rrdtool_update, 2);
-    rb_define_method(cRRDtool, "graph",      rrdtool_graph, 1);
     rb_define_method(cRRDtool, "fetch",      rrdtool_fetch, 1);
-    rb_define_method(cRRDtool, "xport",      rrdtool_xport, 1);
     rb_define_method(cRRDtool, "restore",    rrdtool_restore, 3);
     rb_define_method(cRRDtool, "dump",       rrdtool_dump, 0);
     rb_define_method(cRRDtool, "tune",       rrdtool_tune, 1);
@@ -1084,5 +1091,7 @@ void Init_RRDtool()
     rb_define_method(cRRDtool, "info",       rrdtool_info, 0);
     
     /* version() is really a library function */
-    rb_define_method(cRRDtool, "version",    rrdtool_version, 0);
+    rb_define_singleton_method(cRRDtool, "version", rrdtool_version, 0);
+    rb_define_singleton_method(cRRDtool, "graph",   rrdtool_graph, 1);
+    rb_define_singleton_method(cRRDtool, "xport",   rrdtool_xport, 1);
 }
