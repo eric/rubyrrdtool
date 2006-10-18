@@ -1,6 +1,6 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2006/10/18 01:05:10 $
+ * date:   $Date: 2006/10/18 21:44:10 $
  * init:   2005-07-26
  * vers:   $Version$
  * auth:   $Author: dbach $
@@ -350,24 +350,26 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
  *        spits the XML to stdout.  Redirection from with an extension
  *        seems to be hard.  So, for the moment, we just rely on the 
  *        default behaviour and send in a change request for the fn.
+ *
+ * For the version that takes 
+ *
  * 
  */
-VALUE rrdtool_dump(VALUE self)
+#ifdef HAVE_RRD_DUMP_R_2
+VALUE rrdtool_dump(VALUE self, VALUE output)
 {
     int     ret;    /* result of rrd_dump_r */
-    VALUE   rval;       /* our result */
+    VALUE   rval;   /* our result */
     VALUE   rrd;    /* rrd database filename */
     
     reset_rrd_state();
     
     rrd = rb_iv_get(self, "@rrdname");
-     
-#ifdef HAVE_RRD_DUMP_R_2
-    ret = rrd_dump_r(STR2CSTR(rrd), NULL);
-#else
-    ret = rrd_dump_r(STR2CSTR(rrd));
-#endif
 
+    /* type checking */
+    Check_Type(output, T_STRING);
+    
+    ret = rrd_dump_r(STR2CSTR(rrd), STR2CSTR(output));
     if (ret == -1) {
         RRD_RAISE;
         rval = Qnil;
@@ -376,7 +378,7 @@ VALUE rrdtool_dump(VALUE self)
     }
     return rval;
 }
-
+#endif
 
 /*
  * Document-method: first
@@ -1076,13 +1078,14 @@ void Init_RRDtool()
     rb_define_method(cRRDtool, "update",     rrdtool_update, 2);
     rb_define_method(cRRDtool, "fetch",      rrdtool_fetch, 1);
     rb_define_method(cRRDtool, "restore",    rrdtool_restore, 3);
-    rb_define_method(cRRDtool, "dump",       rrdtool_dump, 0);
     rb_define_method(cRRDtool, "tune",       rrdtool_tune, 1);
     rb_define_method(cRRDtool, "last",       rrdtool_last, 0);
     rb_define_method(cRRDtool, "first",      rrdtool_first, 1);
     rb_define_method(cRRDtool, "resize",     rrdtool_resize, 1);
     rb_define_method(cRRDtool, "info",       rrdtool_info, 0);
-    
+#ifdef HAVE_RRD_DUMP_R_2
+    rb_define_method(cRRDtool, "dump",       rrdtool_dump, 1);
+#endif
     /* version() is really a library function */
     rb_define_singleton_method(cRRDtool, "version", rrdtool_version, 0);
     rb_define_singleton_method(cRRDtool, "graph",   rrdtool_graph, 1);

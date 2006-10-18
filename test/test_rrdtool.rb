@@ -45,7 +45,20 @@ class TestRRDtool < Test::Unit::TestCase
   end
 
   def test_dump
-    flunk # argh! dump goes directly to stdout, does not pass go
+    # RRDtool.dump is not defined for older versions of RRDtool
+    dump_file = "#{@f}.out"
+    create_file
+    create_data
+    if RRDtool.version < 1.2015 then
+      assert_raise NoMethodError do
+        @r.dump dump_file
+      end
+    else
+      @r.dump dump_file
+      assert File.readable? dump_file
+    end
+    # cleanup
+    File.delete dump_file if File.exists? dump_file
   end
 
   def test_fetch
