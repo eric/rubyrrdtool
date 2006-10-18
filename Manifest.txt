@@ -2,9 +2,6 @@ README
 MANIFEST.txt
 Rakefile
 extconf.rb
-examples/*.rb
-test/*.rb
-orig/*
-play/*
+test/test_rrdtool.rb
 rrd_addition.h
 rubyrrdtool.c
