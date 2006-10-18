@@ -1,6 +1,6 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2006/10/17 23:34:06 $
+ * date:   $Date: 2006/10/18 01:05:10 $
  * init:   2005-07-26
  * vers:   $Version$
  * auth:   $Author: dbach $
@@ -28,7 +28,7 @@
 #define  R_RRD_DEBUG_OFF 0  /* no debugging   */
 #define  R_RRD_DEBUG_SIM 1  /* basic debug    */
 #define  R_RRD_DEBUG_DET 2  /* more details   */
-#undef  R_RRD_DBG
+#undef   R_RRD_DBG
 
 #ifdef R_RRD_DBG
 void _dbug(int level, char *s) {
@@ -303,8 +303,8 @@ VALUE rrdtool_create(VALUE self, VALUE ostep, VALUE update, VALUE args)
     pdp_step = NUM2LONG(ostep);
     last_up  = (time_t)NUM2LONG(update);
 #ifdef R_RRD_DBG    
-    snprintf(buf, NUM_BUF_SZ, "n=[%s] : step=%u : up=%u", STR2CSTR(rrd),
-             pdp_step, (unsigned int)last_up);
+    snprintf(buf, NUM_BUF_SZ, "n=[%s] : step=%lu : up=%ld", STR2CSTR(rrd),
+             pdp_step, (long int)last_up);
     buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
@@ -421,8 +421,8 @@ VALUE rrdtool_first(VALUE self, VALUE orra_idx)
     }
     
 #ifdef R_RRD_DBG    
-    snprintf(buf, NUM_BUF_SZ, "first: rrd=[%s] : idx=%d : val=%ul",
-             STR2CSTR(rrd), idx, (unsigned long)when);
+    snprintf(buf, NUM_BUF_SZ, "first: rrd=[%s] : idx=%d : val=%ld",
+             STR2CSTR(rrd), idx, when);
     buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
@@ -464,8 +464,7 @@ VALUE rrdtool_last(VALUE self)
     }
     
 #ifdef R_RRD_DBG    
-    snprintf(buf, NUM_BUF_SZ, "last: rrd=[%s] : val=%ul",
-             STR2CSTR(rrd), (unsigned long)when);
+    snprintf(buf, NUM_BUF_SZ, "last: rrd=[%s] : val=%ld", STR2CSTR(rrd), when);
     buf[NUM_BUF_SZ] = 0;
     _dbug(R_RRD_DEBUG_SIM, buf);
 #endif
@@ -610,9 +609,6 @@ VALUE rrdtool_call(VALUE self, RRDtoolFUNC fn, VALUE args)
 {
     s_arr     a;        /* varargs in the form of a string array */
     VALUE     rval;     /* our result */
-#ifdef R_RRD_DBG
-    char     buf[NUM_BUF_SZ+1];
-#endif
     int result;
     
     reset_rrd_state();
@@ -997,9 +993,6 @@ VALUE rrdtool_info(VALUE self)
     VALUE   rrd;        /* rrd database filename */
     VALUE   rval;       /* our result */
     info_t *data, *p;   /* this is what rrd_info()returns */
-#ifdef R_RRD_DBG    
-    char    buf[NUM_BUF_SZ+1];
-#endif
 
     reset_rrd_state();
     
