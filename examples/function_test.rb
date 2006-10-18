@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# $Id: function_test.rb,v 1.1 2006/06/09 22:54:22 dbach Exp $
+# $Id: function_test.rb,v 1.2 2006/10/18 21:43:38 dbach Exp $
 # Driver does not carry cash.
 
 # insert the lib directory at the front of the path to pick up 
@@ -20,7 +20,7 @@ puts "created new RRD database -> #{rrd.rrdname}"
 #           Version
 # ---------------------------------------------
 puts "RRD Version "
-n = rrd.version
+n = RRDtool.version
 puts "version() returned #{(n.nil?) ? "nil" : n}"
 puts
 

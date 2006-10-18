@@ -9,7 +9,7 @@ start   = Time.now.to_i
 rrd = RRDtool.new(rrdname)
 puts "created new RRD database -> #{rrd.rrdname}"
 
-puts "vers -> #{rrd.version}"
+puts "vers -> #{RRDtool.version}"
 
 # ---------------------------------------------
 #           Create
@@ -39,7 +39,7 @@ end
 #           Graph
 # ---------------------------------------------
 puts "generating graph #{name}.png"
-rrd.graph(
+RRDtool.graph(
    ["#{name}.png",
     "DEF:a=#{rrdname}:ds_0:AVERAGE",
     "DEF:b=#{rrdname}:ds_0:MIN",
