@@ -1,5 +1,5 @@
 README
-MANIFEST.txt
+Manifest.txt
 Rakefile
 extconf.rb
 test/test_rrdtool.rb
