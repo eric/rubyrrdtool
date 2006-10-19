@@ -1,6 +1,6 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2006/10/18 21:44:10 $
+ * date:   $Date: 2006/10/19 19:25:00 $
  * init:   2005-07-26
  * vers:   $Version$
  * auth:   $Author: dbach $
@@ -45,6 +45,8 @@ extern int optind;
 extern int opterr;
 
 typedef int (*RRDtoolFUNC)(int argc, char ** argv);
+typedef int (*RRDtoolOutputFUNC)(int, char **, time_t *, time_t *, unsigned long *,
+                                 unsigned long *, char ***, rrd_value_t **);
 
 /*
  * define macros for easy error checking
@@ -744,6 +746,70 @@ VALUE rrdtool_restore(VALUE self, VALUE oxml, VALUE orrd, VALUE args)
 
 
 /*
+ * TODO: the fetch and xport functions are very similar. Time to refactor!
+ *
+ */
+VALUE data_output_common(RRDtoolOutputFUNC fn, s_arr a)
+{
+    unsigned long i, j, k, step, count;
+    rrd_value_t  *rrd_data;
+    char        **header_strings;
+    VALUE         data, header, rval = Qnil;
+    time_t        start, end;
+#ifdef R_RRD_DBG    
+    char buf[NUM_BUF_SZ+1];
+#endif
+    
+    fn(a.len, a.strs, &start, &end, &step, 
+       &count, &header_strings, &rrd_data);
+
+    // TODO: a leaks memory if check_error is called here
+    RRD_CHECK_ERROR;
+
+    /* process the data .. get the header first */
+    header = rb_ary_new();
+    for (i = 0; i < count; ++i) {
+        rb_ary_push(header, rb_str_new2(header_strings[i]));
+#ifdef R_RRD_DBG    
+        snprintf(buf, NUM_BUF_SZ, "%s: header: n=[%s]",
+                 (fn == rrd_fetch) ? "fetch" : "xport", header_strings[i]);
+        buf[NUM_BUF_SZ] = 0;
+        _dbug(R_RRD_DEBUG_SIM, buf);
+#endif
+        free(header_strings[i]);
+    }
+    free(header_strings);
+    
+    /* step over the 2d array containing the data */
+    k = 0;
+    data = rb_ary_new();
+    for (i = start+step; i <= end; i += step) {
+        VALUE line = rb_ary_new2(count);
+        for (j = 0; j < count; j++) {
+            rb_ary_store(line, j, rb_float_new(rrd_data[k]));
+            k++;
+        }
+        rb_ary_push(data, line);
+    }
+    free(rrd_data);
+    
+    /* now prepare an array for ruby to chew on .. */
+    rval = rb_ary_new2(6);
+    rb_ary_store(rval, 0, LONG2NUM(start+step));
+    rb_ary_store(rval, 1, LONG2NUM(end));
+
+    // used in xport, but not fetch
+    rb_ary_store(rval, 2, UINT2NUM(step));
+    rb_ary_store(rval, 3, UINT2NUM(count));
+
+    rb_ary_store(rval, 4, header);
+    rb_ary_store(rval, 5, data);
+
+    return rval;
+}
+
+
+/*
  * Document-method: fetch
  * 
  * call-seq:
@@ -774,62 +840,20 @@ VALUE rrdtool_restore(VALUE self, VALUE oxml, VALUE orrd, VALUE args)
 VALUE rrdtool_fetch(VALUE self, VALUE args)
 {
     s_arr         a;
-    unsigned long i, j, k, step, ds_cnt;
-    rrd_value_t  *rrd_data;
-    char        **ds_names;
-    VALUE         data, names, rval = Qnil;
-    time_t        start, end;
-#ifdef R_RRD_DBG    
-    char buf[NUM_BUF_SZ+1];
-#endif
+    VALUE         rval = Qnil;
     
     reset_rrd_state();
     
     a = s_arr_new(self, true, true, args);
-    
-    rrd_fetch(a.len, a.strs, &start, &end, &step, 
-              &ds_cnt, &ds_names, &rrd_data);
 
+    rval = data_output_common(rrd_fetch, a);
+    
     s_arr_del(a);
 
     RRD_CHECK_ERROR;
 
-    /* process the data .. get the names first */
-    names = rb_ary_new();
-    for (i = 0; i < ds_cnt; i++) {
-        rb_ary_push(names, rb_str_new2(ds_names[i]));
-#ifdef R_RRD_DBG    
-        snprintf(buf, NUM_BUF_SZ, "fetch: names: n=[%s]", ds_names[i]);
-        buf[NUM_BUF_SZ] = 0;
-        _dbug(R_RRD_DEBUG_SIM, buf);
-#endif
-        free(ds_names[i]);
-    }
-    free(ds_names);
-    
-    /* step over the 2d array containing the data */
-    k = 0;
-    data = rb_ary_new();
-    for (i = start; i <= end; i += step) {
-        VALUE line = rb_ary_new2(ds_cnt);
-        for (j = 0; j < ds_cnt; j++) {
-            rb_ary_store(line, j, rb_float_new(rrd_data[k]));
-            k++;
-        }
-        rb_ary_push(data, line);
-    }
-    free(rrd_data);
-    
-    /* now prepare an array for ruby to chew on .. */
-    rval = rb_ary_new2(4);
-    rb_ary_store(rval, 0, LONG2NUM(start));
-    rb_ary_store(rval, 1, LONG2NUM(end));
-    rb_ary_store(rval, 2, names);
-    rb_ary_store(rval, 3, data);
-
     return rval;
 }
-
 
 
 /*
@@ -912,7 +936,7 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
     /* step over the 2d array containing the data */
     k = 0;
     data = rb_ary_new();
-    for (i = start; i <= end; i += step) {
+    for (i = start+step; i <= end; i += step) {
         VALUE line = rb_ary_new2(col_cnt);
         for (j = 0; j < col_cnt; j++) {
             rb_ary_store(line, j, rb_float_new(rrd_data[k]));
@@ -924,7 +948,7 @@ VALUE rrdtool_xport(VALUE self, VALUE args)
     
     /* now prepare an array for ruby to chew on .. */
     rval = rb_ary_new2(6);
-    rb_ary_store(rval, 0, LONG2NUM(start));
+    rb_ary_store(rval, 0, LONG2NUM(start+step));
     rb_ary_store(rval, 1, LONG2NUM(end));
     rb_ary_store(rval, 2, UINT2NUM(step));
     rb_ary_store(rval, 3, UINT2NUM(col_cnt));
