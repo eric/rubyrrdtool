@@ -1,6 +1,6 @@
 /* -----
  * file:   rubyrrdtool.c
- * date:   $Date: 2006/10/19 19:25:00 $
+ * date:   $Date: 2008/03/11 22:43:11 $
  * init:   2005-07-26
  * vers:   $Version$
  * auth:   $Author: dbach $
@@ -1051,6 +1051,7 @@ VALUE rrdtool_info(VALUE self)
         }
         p = data;
         data = data->next;
+	free(p->key);
         free(p);
     }
     return rval;
