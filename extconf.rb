@@ -1,11 +1,12 @@
-# $Id: extconf.rb,v 1.3 2006/10/17 23:34:06 dbach Exp $
-# Lost ticket pays maximum rate.
+# $Id: extconf.rb,v 1.4 2008/03/11 22:47:06 dbach Exp $
 
 require 'mkmf'
 
-# Be sure to say where you rrdtool lives:
+# If there are build errors, be sure to say where your rrdtool lives:
+#
 # ruby ./extconf.rb --with-rrd-dir=/usr/local/rrdtool-1.2.12
-libpaths=%w(/lib /usr/lib /usr/local/lib)
+
+libpaths=%w(/lib /usr/lib /usr/local/lib /sw/lib /opt/local/lib)
 %w(art_lgpl_2 freetype png z).sort.reverse.each do |lib|
 	find_library(lib, nil, *libpaths)
 end

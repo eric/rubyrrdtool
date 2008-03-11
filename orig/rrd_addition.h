@@ -1,9 +1,9 @@
 /* -*- C -*-
  * file:   rrd_addition.h
- * date:   $Date: 2005/08/04 01:16:07 $
+ * date:   $Date: 2008/03/11 22:47:07 $
  * init:   2005-07-26
  * vers:   $Version$
- * auth:   $Author: probertm $
+ * auth:   $Author: dbach $
  * -----
  * 
  * Support file to add rrd_info() to rrd.h
