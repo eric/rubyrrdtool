@@ -120,7 +120,7 @@ VALUE rb_rrd_fetch(VALUE self, VALUE args)
 
     k = 0;
     data = rb_ary_new();
-    for (i = start; i <= end; i += step) {
+    for (i = start; i < end; i += step) {
         VALUE line = rb_ary_new2(ds_cnt);
         for (j = 0; j < ds_cnt; j++) {
             rb_ary_store(line, j, rb_float_new(raw_data[k]));
